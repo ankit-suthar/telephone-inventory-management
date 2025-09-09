@@ -3,7 +3,6 @@ package com.telephone.inventory.management.service;
 import com.common.models.enums.PhoneNumberStatus;
 import com.common.models.exceptions.NumberStatusUpdateException;
 import com.common.models.exceptions.PhoneNumberDoesNotExistException;
-import com.common.models.model.PhoneRecordCassandra;
 import com.common.models.model.PhoneRecordPostgres;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,7 +16,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -43,14 +41,12 @@ public class NumberBookingService {
             throw new IllegalStateException("Invalid transition: " + current + " → " + next);
         }
 
-//        Optional<PhoneRecordCassandra> optional = cassandraRepo.findById(e164Number);
         Optional<PhoneRecordPostgres> optional = postgresRepo.findById(e164Number);
 
         if(optional.isEmpty()) {
             throw new PhoneNumberDoesNotExistException(String.format("Phone number %s does not exist", e164Number));
         }
 
-//        PhoneRecordCassandra obj = optional.get();
         PhoneRecordPostgres obj = optional.get();
 
         if(!obj.getStatus().toValue().equals(current.toString())) {
@@ -74,18 +70,18 @@ public class NumberBookingService {
             request.setCorrelationId(UUID.randomUUID().toString());
         }
 
+        String userId = request.getUserId();
+        String correlationId = request.getCorrelationId();
+
         // If telephone is available then userid must be null
         if(next.toValue().equals(PhoneNumberStatus.AVAILABLE.toValue())) {
-            request.setUserId(null);
+            userId = null;
+            correlationId = null;
         }
-        // CAS update (compare-and-set on version + current state)
-        /*boolean updated = cassandraRepo.updateIfMatch(request.getCorrelationId(), next, obj.getVersion()+1,
-                                request.getUserId(), obj.getE164Number(), obj.getVersion(), current);*/
 
-        int count = postgresRepo.updateIfMatch(request.getCorrelationId(), next, obj.getVersion()+1,
-                request.getUserId(), obj.getE164Number(), obj.getVersion(), current);
+        int count = postgresRepo.updateIfMatch(correlationId, next, obj.getVersion()+1,
+                userId, obj.getE164Number(), obj.getVersion(), current);
 
-//        if(!updated) {
         if(count==0) {
             String msg = String.format(
                     "Number %d reservation failed: version mismatch or not AVAILABLE", obj.getVersion());
