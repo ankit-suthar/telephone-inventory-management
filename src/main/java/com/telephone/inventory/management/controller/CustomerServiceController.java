@@ -9,7 +9,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/customer")
@@ -20,14 +23,17 @@ public class CustomerServiceController {
 
     private static final Logger log = LoggerFactory.getLogger(CustomerServiceController.class);
 
-    @PostMapping("/numbers/{e164Number}/transition")
-    public ResponseEntity<ApiResponse> applyTransition(@PathVariable("e164Number") String phoneNumber,
-                                                       @RequestBody TransitionRequest request) {
+    @PostMapping("/numbers/transition")
+    public ResponseEntity<ApiResponse> applyTransition(@RequestBody TransitionRequest request) {
+        log.info("Hello transition api");
+        String phoneNumber = request.getE164Number();
+
         if (phoneNumber.isEmpty() || !phoneNumber.matches("\\+\\d{10,15}")) {
             String msg = String.format("Invalid record skipped: %s", phoneNumber);
             throw new InvalidPhoneNumberException(msg);
         }
 
+        log.info("Number validation passed {}", phoneNumber);
         bookingService.transitionNumber(phoneNumber, request);
 
         log.info("Successfully updated number {}", phoneNumber);

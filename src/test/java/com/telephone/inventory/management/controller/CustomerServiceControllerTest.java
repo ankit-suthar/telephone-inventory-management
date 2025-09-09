@@ -19,7 +19,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,24 +42,36 @@ class CustomerServiceControllerTest {
 
     @Test
     void applyTransition_validNumber_callsService() throws Exception {
-        String phoneNumber = "+12345678901"; // valid E164
-        String requestBody = "{ \"status\": \"BOOKED\" }";
+        String requestBody = """
+                    {
+                        "e164Number": "+12345678901",
+                        "currentStatus": "AVAILABLE",
+                        "nextStatus": "RESERVED",
+                        "userId": "user1"
+                    }
+                    """;
 
-        mockMvc.perform(post("/customer/numbers/" + phoneNumber + "/transition")
+        mockMvc.perform(post("/customer/numbers/transition")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isOk());
 
         verify(bookingService, times(1))
-                .transitionNumber(eq(phoneNumber), any(TransitionRequest.class));
+                .transitionNumber(eq("+12345678901"), any(TransitionRequest.class));
     }
 
     @Test
     void applyTransition_invalidNumber_returnsBadRequest() throws Exception {
-        String phoneNumber = "123"; // invalid E164
-        String requestBody = "{ \"status\": \"BOOKED\" }";
+        String requestBody = """
+                    {
+                        "e164Number": "123",
+                        "currentStatus": "AVAILABLE",
+                        "nextStatus": "RESERVED",
+                        "userId": "user1"
+                    }
+                    """;
 
-        mockMvc.perform(post("/customer/numbers/" + phoneNumber + "/transition")
+        mockMvc.perform(post("/customer/numbers/transition")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest());
@@ -71,14 +82,19 @@ class CustomerServiceControllerTest {
 
     @Test
     void applyTransition_emptyNumber_returnsBadRequest() throws Exception {
-        String phoneNumber = ""; // empty
-        String requestBody = "{ \"status\": \"BOOKED\" }";
+        String requestBody = """
+                {
+                    "e164Number": "",
+                    "currentStatus": "AVAILABLE",
+                    "nextStatus": "RESERVED",
+                    "userId": "user1"
+                }
+                """;
 
-        mockMvc.perform(post("/customer/numbers/" + phoneNumber + "/transition")
+        mockMvc.perform(post("/customer/numbers/transition")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
-                .andExpect(status().isNotFound())
-                .andExpect(content().string(""));
+                .andExpect(status().isBadRequest());
 
         verify(bookingService, times(0))
                 .transitionNumber(anyString(), any(TransitionRequest.class));

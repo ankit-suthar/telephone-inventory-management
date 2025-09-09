@@ -4,17 +4,20 @@ import com.common.models.enums.PhoneNumberStatus;
 import com.common.models.exceptions.NumberStatusUpdateException;
 import com.common.models.exceptions.PhoneNumberDoesNotExistException;
 import com.common.models.model.PhoneRecordCassandra;
+import com.common.models.model.PhoneRecordPostgres;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.telephone.inventory.management.model.TransitionRequest;
 import com.telephone.inventory.management.repository.PhoneRecordCassandraRepo;
+import com.telephone.inventory.management.repository.PhoneRecordPostgresRepo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -29,22 +32,26 @@ public class NumberBookingService {
     @Autowired
     private KafkaTemplate<Object, JsonNode> kafkaTemplate;
 
+    @Autowired
+    private PhoneRecordPostgresRepo postgresRepo;
+
     public void transitionNumber(String e164Number, TransitionRequest request) {
         PhoneNumberStatus current = request.getCurrentStatus();
         PhoneNumberStatus next = request.getNextStatus();
-        String correlationId;
 
         if (!current.canTransitionTo(next)) {
             throw new IllegalStateException("Invalid transition: " + current + " → " + next);
         }
 
-        Optional<PhoneRecordCassandra> optional = cassandraRepo.findById(e164Number);
+//        Optional<PhoneRecordCassandra> optional = cassandraRepo.findById(e164Number);
+        Optional<PhoneRecordPostgres> optional = postgresRepo.findById(e164Number);
 
         if(optional.isEmpty()) {
             throw new PhoneNumberDoesNotExistException(String.format("Phone number %s does not exist", e164Number));
         }
 
-        PhoneRecordCassandra obj = optional.get();
+//        PhoneRecordCassandra obj = optional.get();
+        PhoneRecordPostgres obj = optional.get();
 
         if(!obj.getStatus().toValue().equals(current.toString())) {
             throw new IllegalStateException("Current status mismatch. Expected current status: " + current +
@@ -67,11 +74,19 @@ public class NumberBookingService {
             request.setCorrelationId(UUID.randomUUID().toString());
         }
 
+        // If telephone is available then userid must be null
+        if(next.toValue().equals(PhoneNumberStatus.AVAILABLE.toValue())) {
+            request.setUserId(null);
+        }
         // CAS update (compare-and-set on version + current state)
-        boolean updated = cassandraRepo.updateIfMatch(request.getCorrelationId(), next, obj.getVersion()+1,
-                                obj.getE164Number(), obj.getVersion(), current);
+        /*boolean updated = cassandraRepo.updateIfMatch(request.getCorrelationId(), next, obj.getVersion()+1,
+                                request.getUserId(), obj.getE164Number(), obj.getVersion(), current);*/
 
-        if(!updated) {
+        int count = postgresRepo.updateIfMatch(request.getCorrelationId(), next, obj.getVersion()+1,
+                request.getUserId(), obj.getE164Number(), obj.getVersion(), current);
+
+//        if(!updated) {
+        if(count==0) {
             String msg = String.format(
                     "Number %d reservation failed: version mismatch or not AVAILABLE", obj.getVersion());
             throw new NumberStatusUpdateException(msg);
@@ -79,11 +94,16 @@ public class NumberBookingService {
 
         log.info("Number {} reserved successfully", obj.getE164Number());
 
+        obj.setStatus(request.getNextStatus());
+        obj.setVersion(obj.getVersion() + 1);
+
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode node = mapper.valueToTree(obj);
         node.put("correlationId", request.getCorrelationId());
         node.put("userId", request.getUserId());
+        JsonNode jsonNode = node;
 
-        kafkaTemplate.send("post-processing", node);
+        // DLQ logic has to be here in case of failure
+        kafkaTemplate.send("post-processing", jsonNode);
     }
 }

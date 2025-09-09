@@ -7,6 +7,7 @@ public class TransitionRequest {
     private PhoneNumberStatus nextStatus;
     private String correlationId;
     private String userId;
+    private String e164Number;
 
     public PhoneNumberStatus getCurrentStatus() {
         return currentStatus;
@@ -38,5 +39,24 @@ public class TransitionRequest {
 
     public void setUserId(String userId) {
         this.userId = userId;
+    }
+
+    public String getE164Number() {
+        return e164Number;
+    }
+
+    public void setE164Number(String e164Number) {
+        this.e164Number = e164Number;
+    }
+
+    @Override
+    public String toString() {
+        return "TransitionRequest{" +
+                "currentStatus=" + currentStatus +
+                ", nextStatus=" + nextStatus +
+                ", correlationId='" + correlationId + '\'' +
+                ", userId='" + userId + '\'' +
+                ", e164Number='" + e164Number + '\'' +
+                '}';
     }
 }

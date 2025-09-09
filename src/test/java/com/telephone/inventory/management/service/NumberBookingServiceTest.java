@@ -4,10 +4,12 @@ import com.common.models.enums.PhoneNumberStatus;
 import com.common.models.exceptions.NumberStatusUpdateException;
 import com.common.models.exceptions.PhoneNumberDoesNotExistException;
 import com.common.models.model.PhoneRecordCassandra;
+import com.common.models.model.PhoneRecordPostgres;
 import com.telephone.inventory.management.model.TransitionRequest;
 import com.telephone.inventory.management.repository.PhoneRecordCassandraRepo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.telephone.inventory.management.repository.PhoneRecordPostgresRepo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -33,6 +35,9 @@ class NumberBookingServiceTest {
     private PhoneRecordCassandraRepo cassandraRepo;
 
     @Mock
+    private PhoneRecordPostgresRepo postgresRepo;
+
+    @Mock
     private KafkaTemplate<Object, JsonNode> kafkaTemplate;
 
     @BeforeEach
@@ -48,20 +53,27 @@ class NumberBookingServiceTest {
         request.setNextStatus(PhoneNumberStatus.RESERVED);
         request.setUserId("user1");
 
-        PhoneRecordCassandra record = new PhoneRecordCassandra();
+//        PhoneRecordCassandra record = new PhoneRecordCassandra();
+        PhoneRecordPostgres record = new PhoneRecordPostgres();
         record.setE164Number(e164);
         record.setStatus(PhoneNumberStatus.AVAILABLE);
         record.setVersion(1);
 
-        when(cassandraRepo.findById(e164)).thenReturn(Optional.of(record));
-        when(cassandraRepo.updateIfMatch(anyString(), eq(PhoneNumberStatus.RESERVED),
-                eq(2), eq(e164), eq(1), eq(PhoneNumberStatus.AVAILABLE)))
-                .thenReturn(true);
+        when(postgresRepo.findById(e164)).thenReturn(Optional.of(record));
+        when(postgresRepo.updateIfMatch(anyString(), eq(PhoneNumberStatus.RESERVED),
+                eq(2), anyString(), eq(e164), eq(1), eq(PhoneNumberStatus.AVAILABLE)))
+                .thenReturn(1);
+//        when(cassandraRepo.findById(e164)).thenReturn(Optional.of(record));
+//        when(cassandraRepo.updateIfMatch(anyString(), eq(PhoneNumberStatus.RESERVED),
+//                eq(2), anyString(), eq(e164), eq(1), eq(PhoneNumberStatus.AVAILABLE)))
+//                .thenReturn(true);
 
         service.transitionNumber(e164, request);
 
-        verify(cassandraRepo).updateIfMatch(anyString(), eq(PhoneNumberStatus.RESERVED),
-                eq(2), eq(e164), eq(1), eq(PhoneNumberStatus.AVAILABLE));
+        /*verify(cassandraRepo).updateIfMatch(anyString(), eq(PhoneNumberStatus.RESERVED),
+                eq(2), anyString(), eq(e164), eq(1), eq(PhoneNumberStatus.AVAILABLE));*/
+        verify(postgresRepo).updateIfMatch(anyString(), eq(PhoneNumberStatus.RESERVED),
+                eq(2), anyString(), eq(e164), eq(1), eq(PhoneNumberStatus.AVAILABLE));
         verify(kafkaTemplate).send(eq("post-processing"), any(ObjectNode.class));
     }
 
@@ -85,7 +97,8 @@ class NumberBookingServiceTest {
         request.setCurrentStatus(PhoneNumberStatus.AVAILABLE);
         request.setNextStatus(PhoneNumberStatus.RESERVED);
 
-        when(cassandraRepo.findById(e164)).thenReturn(Optional.empty());
+//        when(cassandraRepo.findById(e164)).thenReturn(Optional.empty());
+        when(postgresRepo.findById(e164)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.transitionNumber(e164, request))
                 .isInstanceOf(PhoneNumberDoesNotExistException.class)
@@ -99,12 +112,14 @@ class NumberBookingServiceTest {
         request.setCurrentStatus(PhoneNumberStatus.AVAILABLE);
         request.setNextStatus(PhoneNumberStatus.RESERVED);
 
-        PhoneRecordCassandra record = new PhoneRecordCassandra();
+//        PhoneRecordCassandra record = new PhoneRecordCassandra();
+        PhoneRecordPostgres record = new PhoneRecordPostgres();
         record.setE164Number(e164);
         record.setStatus(PhoneNumberStatus.RELEASED); // mismatch
         record.setVersion(1);
 
-        when(cassandraRepo.findById(e164)).thenReturn(Optional.of(record));
+//        when(cassandraRepo.findById(e164)).thenReturn(Optional.of(record));
+        when(postgresRepo.findById(e164)).thenReturn(Optional.of(record));
 
         assertThatThrownBy(() -> service.transitionNumber(e164, request))
                 .isInstanceOf(IllegalStateException.class)
@@ -119,15 +134,20 @@ class NumberBookingServiceTest {
         request.setNextStatus(PhoneNumberStatus.RESERVED);
         request.setUserId("user1");
 
-        PhoneRecordCassandra record = new PhoneRecordCassandra();
+//        PhoneRecordCassandra record = new PhoneRecordCassandra();
+        PhoneRecordPostgres record = new PhoneRecordPostgres();
         record.setE164Number(e164);
         record.setStatus(PhoneNumberStatus.AVAILABLE);
         record.setVersion(1);
 
-        when(cassandraRepo.findById(e164)).thenReturn(Optional.of(record));
-        when(cassandraRepo.updateIfMatch(anyString(), eq(PhoneNumberStatus.RESERVED),
-                eq(2), eq(e164), eq(1), eq(PhoneNumberStatus.AVAILABLE)))
-                .thenReturn(false);
+//        when(cassandraRepo.findById(e164)).thenReturn(Optional.of(record));
+//        when(cassandraRepo.updateIfMatch(anyString(), eq(PhoneNumberStatus.RESERVED),
+//                eq(2), anyString(), eq(e164), eq(1), eq(PhoneNumberStatus.AVAILABLE)))
+//                .thenReturn(false);
+        when(postgresRepo.findById(e164)).thenReturn(Optional.of(record));
+        when(postgresRepo.updateIfMatch(anyString(), eq(PhoneNumberStatus.RESERVED),
+                eq(2), anyString(), eq(e164), eq(1), eq(PhoneNumberStatus.AVAILABLE)))
+                .thenReturn(0);
 
         assertThatThrownBy(() -> service.transitionNumber(e164, request))
                 .isInstanceOf(NumberStatusUpdateException.class)

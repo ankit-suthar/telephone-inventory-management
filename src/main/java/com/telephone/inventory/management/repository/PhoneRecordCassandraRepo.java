@@ -9,7 +9,17 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface PhoneRecordCassandraRepo extends CassandraRepository<PhoneRecordCassandra, String> {
 
-    @Query("UPDATE phone_record SET correlation_id = ?1 status = ?2, version = ?3 WHERE e164_number = ?4 IF version = ?5 AND status = ?6")
-    boolean updateIfMatch(String correlationId, PhoneNumberStatus newStatus, int newVersion, String e164Number, int currentVersion, PhoneNumberStatus expectedStatus);
+    @Query("UPDATE phone_records " +
+            "SET correlationid = :correlationId, status = :newStatus, version = :newVersion, userid = :userId " +
+            "WHERE e164number = :e164Number " +
+            "IF version = :currentVersion AND status = :expectedStatus")
+    boolean updateIfMatch(String correlationId,
+                          PhoneNumberStatus newStatus,
+                          int newVersion,
+                          String userId,
+                          String e164Number,
+                          int currentVersion,
+                          PhoneNumberStatus expectedStatus);
+
 }
 
